@@ -21,6 +21,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
+from application.services.llm_explainer import LLMExplainer  # noqa: E402
 from application.services.manual_solver import (  # noqa: E402
     ManualInferenceRequest,
     run_manual_inference,
@@ -81,10 +82,32 @@ def health_check() -> Dict[str, Any]:
 
 @app.post("/api/v1/predict/manual")
 def predict_manual(payload: ManualPredictPayload) -> Dict[str, Any]:
+    # Initialize LLM explainer (lazy, only if needed)
+    llm_explainer = None
+    try:
+        llm_explainer = LLMExplainer()
+    except Exception:
+        pass  # LLM not available, continue without explanation
+    
     if payload.mode == "decision_tree":
         from application.services.decision_solver import run_decision_inference
 
-        result = run_decision_inference(payload.dict())
+        # Remove mode field before passing to decision solver
+        facts_dict = payload.dict(exclude={"mode"})
+        result = run_decision_inference(facts_dict)
+        
+        # Generate LLM explanation if available
+        llm_explanation = None
+        if llm_explainer and result.steps:
+            try:
+                llm_explanation = llm_explainer.explain_inference_trace(
+                    steps=result.steps,
+                    credit_score=result.credit_score,
+                    person_id=payload.person_id
+                )
+            except Exception:
+                pass  # Silently fail if LLM unavailable
+        
         return {
             "person_id": payload.person_id,
             "success": result.success,
@@ -94,9 +117,37 @@ def predict_manual(payload: ManualPredictPayload) -> Dict[str, Any]:
             "facts": result.facts,
             "matched_rule": result.matched_rule,
             "mode": "decision_tree",
+            "llm_explanation": llm_explanation,
         }
-    request = ManualInferenceRequest(**payload.dict())
+    
+    # Only pass valid fields for ontology mode (exclude decision_tree fields)
+    ontology_fields = {
+        "person_id": payload.person_id,
+        "annual_income": payload.annual_income,
+        "outstanding_debt": payload.outstanding_debt,
+        "num_of_loan": payload.num_of_loan,
+        "credit_history_age": payload.credit_history_age,
+        "num_of_delayed_payment": payload.num_of_delayed_payment,
+        "payment_behaviour": payload.payment_behaviour,
+        "spending_level": payload.spending_level,
+        "value_level": payload.value_level,
+        "avg_credit_limit": payload.avg_credit_limit,
+    }
+    request = ManualInferenceRequest(**ontology_fields)
     result = run_manual_inference(request)
+    
+    # Generate LLM explanation if available
+    llm_explanation = None
+    if llm_explainer and result.steps:
+        try:
+            llm_explanation = llm_explainer.explain_inference_trace(
+                steps=result.steps,
+                credit_score=result.credit_score,
+                person_id=payload.person_id
+            )
+        except Exception:
+            pass  # Silently fail if LLM unavailable
+    
     return {
         "person_id": payload.person_id,
         "success": result.success,
@@ -105,6 +156,7 @@ def predict_manual(payload: ManualPredictPayload) -> Dict[str, Any]:
         "missing_facts": result.missing_facts,
         "facts": result.facts,
         "mode": "ontology",
+        "llm_explanation": llm_explanation,
     }
 
 

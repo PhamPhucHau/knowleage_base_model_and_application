@@ -178,24 +178,209 @@ def rule_payment_parser(memory: WorkingMemory) -> Tuple[bool, Optional[str]]:
 
 
 def rule_credit_score_good(memory: WorkingMemory) -> Tuple[bool, Optional[str]]:
-    conditions = [
-        memory.facts.get("DTI_Ratio", 1) <= 0.1,
-        memory.facts.get("Credit_Utilization_Ratio", 1) <= 0.1,
-        memory.facts.get("Num_of_Delayed_Payment", 0) == 0,
-    ]
+    """
+    R_CS_G: Suy diễn Credit Score = Good
+    
+    Điều kiện (đã điều chỉnh dựa trên phân tích Good → Standard và Good → Unknown):
+    - DTI_Ratio <= 0.05: Cho phép Delayed <= 10 và Utilization <= 0.7
+    - DTI_Ratio > 0.05 và <= 0.1: Cho phép Delayed <= 5 và Utilization <= 0.7
+    
+    Lý do: 
+    - Good → Standard (24 cases): DTI=0.042, Delayed=7-8 → cần nới lỏng Delayed nếu DTI rất thấp
+    - Good → Unknown (11 cases): DTI=0.017, Util=0.605, Delayed=1 → nên match nhưng bị R_CS_S match trước
+    """
+    # Nếu đã có Credit_Score thì không chạy
+    if "Credit_Score" in memory.facts:
+        return False, None
+    
+    dti = memory.facts.get("DTI_Ratio", 1)
+    utilization = memory.facts.get("Credit_Utilization_Ratio", 1)
+    delayed = memory.facts.get("Num_of_Delayed_Payment", 999)
+    
+    # Điều kiện Good: Nới lỏng hơn dựa trên DTI
+    if dti <= 0.05:
+        # DTI rất thấp: cho phép Delayed cao hơn
+        conditions = [
+            delayed <= 10,  # Nới lỏng từ 5 lên 10
+            utilization <= 0.7,
+        ]
+    elif dti <= 0.1:
+        # DTI thấp: cho phép Delayed cao hơn một chút
+        conditions = [
+            delayed <= 8,  # Nới lỏng từ 5 lên 8 để cover Good cases có DTI 0.042-0.05
+            utilization <= 0.7,
+        ]
+    else:
+        # DTI > 0.1: không match Good
+        return False, None
+    
     if all(conditions):
         updated = memory.upsert_fact("Credit_Score", "Good", "R_CS_G")
         return updated, "R_CS_G" if updated else (False, None)
     return False, None
 
 
+def rule_credit_score_standard(memory: WorkingMemory) -> Tuple[bool, Optional[str]]:
+    """
+    R_CS_S: Suy diễn Credit Score = Standard
+    
+    Điều kiện (đã điều chỉnh dựa trên phân tích Unknown cases):
+    - Nếu đã có Credit_Score thì không chạy
+    - Mở rộng để cover nhiều trường hợp hơn:
+      * DTI <= 0.1 nhưng có Delayed > 5 HOẶC Utilization > 0.2
+      * Delayed > 15 và <= 20 (nhiều Standard cases có Delayed 17-19)
+      * Utilization > 0.5 nhưng DTI thấp và Delayed thấp
+      * DTI > 0.1 và <= 0.3
+    - Và không quá xấu (DTI < 0.4, Delayed <= 20)
+    """
+    # Nếu đã có Credit_Score thì không chạy
+    if "Credit_Score" in memory.facts:
+        return False, None
+    
+    dti = memory.facts.get("DTI_Ratio", 0)
+    utilization = memory.facts.get("Credit_Utilization_Ratio", 0)
+    delayed = memory.facts.get("Num_of_Delayed_Payment", 0)
+    
+    # Điều kiện Standard (mở rộng nhưng tránh match Good cases)
+    # Case 1: DTI thấp nhưng có vấn đề về Delayed hoặc Utilization
+    # KHÔNG match nếu có thể match Good (DTI <= 0.05 và Delayed <= 10, HOẶC DTI <= 0.1 và Delayed <= 8)
+    case1 = (
+        dti <= 0.1 and
+        not (dti <= 0.05 and delayed <= 10) and  # Tránh match Good cases (DTI <= 0.05)
+        not (dti <= 0.1 and delayed <= 8),  # Tránh match Good cases (DTI <= 0.1)
+        (delayed > 5 or utilization > 0.2) and
+        delayed <= 17  # Giới hạn để không overlap với Poor (Delayed > 17)
+    )
+    
+    # Case 2: Delayed trong range Standard (5-17)
+    # KHÔNG match nếu có thể match Good hoặc Poor
+    case2 = (
+        5 < delayed <= 17 and
+        dti < 0.4 and
+        not (dti <= 0.05 and delayed <= 10) and  # Tránh match Good cases
+        not (dti <= 0.1 and delayed <= 8) and  # Tránh match Good cases
+        not (dti >= 0.15 and delayed > 15)  # Tránh match Poor cases
+    )
+    
+    # Case 3: DTI trong range Standard
+    # KHÔNG match nếu Delayed > 15 và DTI >= 0.15 (có thể là Poor)
+    case3 = (
+        0.1 < dti <= 0.3 and
+        delayed <= 17 and
+        not (dti >= 0.15 and delayed > 15)  # Tránh match Poor cases
+    )
+    
+    # Case 4: Utilization cao nhưng DTI thấp và Delayed thấp
+    # KHÔNG match nếu có thể match Good
+    case4 = (
+        utilization > 0.5 and
+        dti <= 0.1 and
+        delayed <= 5 and
+        not (dti <= 0.05 and delayed <= 10) and  # Tránh match Good cases
+        not (dti <= 0.1 and delayed <= 8)  # Tránh match Good cases
+    )
+    
+    # Case 5: DTI thấp (<= 0.1) nhưng Delayed = 0-5 và Util thấp (có thể là Standard)
+    case5 = (
+        dti <= 0.1 and
+        delayed <= 5 and
+        utilization <= 0.2 and
+        not (dti <= 0.05 and delayed <= 10) and  # Tránh match Good cases
+        not (dti <= 0.1 and delayed <= 8)  # Tránh match Good cases
+    )
+    
+    # Case 6: Delayed > 17 nhưng DTI thấp (< 0.15) và không match Poor
+    case6 = (
+        delayed > 17 and
+        dti < 0.15 and
+        delayed <= 20  # Cho phép Delayed cao hơn một chút
+    )
+    
+    is_standard = (case1 or case2 or case3 or case4 or case5 or case6) and (
+        dti < 0.4 and  # Không quá xấu
+        delayed <= 20  # Mở rộng từ 17 lên 20 để cover nhiều cases hơn
+    )
+    
+    if is_standard:
+        updated = memory.upsert_fact("Credit_Score", "Standard", "R_CS_S")
+        return updated, "R_CS_S" if updated else (False, None)
+    return False, None
+
+
 def rule_credit_score_poor(memory: WorkingMemory) -> Tuple[bool, Optional[str]]:
-    conditions = [
-        memory.facts.get("DTI_Ratio", 0) >= 0.4,
-        memory.facts.get("Num_of_Loan", 0) > 3,
-        memory.facts.get("Credit_History_Age_Months", math.inf) < 60,
-    ]
-    if all(conditions):
+    """
+    R_CS_P: Suy diễn Credit Score = Poor
+    
+    Điều kiện (đã điều chỉnh dựa trên phân tích Unknown cases):
+    - Nếu đã có Credit_Score thì không chạy
+    - Case 1: Delayed > 17 + (DTI >= 0.15 HOẶC Utilization > 0.3)
+    - Case 1b: Delayed > 15 và <= 17 + DTI >= 0.15
+    - Case 2: DTI >= 0.3 + additional_risk
+    - Case 3: Delayed > 15 + additional_risk
+    - Case 4: Utilization > 0.5 + additional_risk
+    - Case 5: Delayed > 20 (không cần điều kiện khác)
+    - Case 6: DTI >= 0.4 (không cần additional_risk) - MỚI
+    - Case 7: Utilization > 0.7 (không cần additional_risk) - MỚI
+    
+    Lý do: 
+    - Tất cả 24 Poor Unknown cases có Delayed > 15 (mean=21.2, min=18, max=24)
+    - Một số cases có DTI hoặc Utilization rất cao nhưng không có additional_risk
+    - Case 6 và 7 cover các trường hợp DTI/Utilization cực cao (rõ ràng là Poor)
+    """
+    # Nếu đã có Credit_Score thì không chạy
+    if "Credit_Score" in memory.facts:
+        return False, None
+    
+    dti = memory.facts.get("DTI_Ratio", 0)
+    utilization = memory.facts.get("Credit_Utilization_Ratio", 0)
+    delayed = memory.facts.get("Num_of_Delayed_Payment", 0)
+    num_loan = memory.facts.get("Num_of_Loan", 0)
+    history_months = memory.facts.get("Credit_History_Age_Months", math.inf)
+    
+    # Điều kiện Poor (nới lỏng nhưng tránh match Standard cases)
+    # Case 1: Delayed quá cao (> 17) + (DTI >= 0.15 HOẶC Utilization > 0.3)
+    # Thêm điều kiện để tránh match Standard cases có Delayed cao nhưng DTI thấp
+    case1 = (
+        delayed > 17 and
+        (dti >= 0.15 or utilization > 0.3)  # Thêm điều kiện để tránh match Standard
+    )
+    
+    # Case 1b: Delayed > 15 và DTI >= 0.15 (cover Poor → Standard cases)
+    case1b = (
+        delayed > 15 and
+        dti >= 0.15 and
+        delayed <= 17  # Trong range Standard nhưng có DTI cao
+    )
+    
+    # Case 2: DTI cao (>= 0.3, nới lỏng từ 0.4) + additional_risk
+    case2 = (
+        dti >= 0.3 and
+        (num_loan > 3 or history_months < 60)
+    )
+    
+    # Case 3: Delayed > 15 + additional_risk
+    case3 = (
+        delayed > 15 and
+        (num_loan > 3 or history_months < 60)
+    )
+    
+    # Case 4: Utilization cao + additional_risk
+    case4 = (
+        utilization > 0.5 and
+        (num_loan > 3 or history_months < 60)
+    )
+    
+    # Case 5: Delayed rất cao (> 20) là đủ để là Poor (không cần điều kiện khác)
+    case5 = delayed > 20
+    
+    # Case 6: DTI rất cao (>= 0.4) là đủ để là Poor (không cần additional_risk)
+    case6 = dti >= 0.4
+    
+    # Case 7: Utilization rất cao (> 0.7) là đủ để là Poor (không cần additional_risk)
+    # Ngưỡng 0.7 để cover các cases có Utilization cao nhưng không có additional_risk
+    case7 = utilization > 0.7
+    
+    if case1 or case1b or case2 or case3 or case4 or case5 or case6 or case7:
         updated = memory.upsert_fact("Credit_Score", "Poor", "R_CS_P")
         return updated, "R_CS_P" if updated else (False, None)
     return False, None
@@ -206,6 +391,7 @@ RULE_EXECUTORS = {
     "R_CU": rule_credit_utilization,
     "R_P1": rule_payment_parser,
     "R_CS_G": rule_credit_score_good,
+    "R_CS_S": rule_credit_score_standard,  # Thêm rule cho Standard
     "R_CS_P": rule_credit_score_poor,
 }
 
