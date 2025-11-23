@@ -1,0 +1,318 @@
+problems:
+  - id: PROB-001
+    title: Scientist baseline profile
+    description: Low debt-to-income scientist with moderate utilization.
+    source_record: "Data Clean.xlsx row 1"
+    objects:
+      - object_id: O1
+        label: Person
+        properties:
+          person_id: Scientist
+          occupation: Scientist
+      - object_id: O2
+        label: Income
+        properties:
+          annual_income: 19114.12
+      - object_id: O3
+        label: Loan
+        properties:
+          num_of_loan: 4
+      - object_id: O4
+        label: DebtProfile
+        properties:
+          outstanding_debt: 809.98
+      - object_id: O5
+        label: PaymentBehaviour
+        properties:
+          spending_level: High
+          value_level: Large
+      - object_id: O6
+        label: CreditHistory
+        properties:
+          raw_string: "22 Years and 1 Months"
+          months: 265
+      - object_id: O7
+        label: Metrics
+        properties:
+          dti_ratio: 0.04238
+          credit_utilization_percent: 26.822619623699
+          credit_utilization_ratio: 0.268226
+          emi: 49.5749492148942
+          balance: 312.494088679437
+    func_results:
+      - func_id: FUNC-001
+        name: Age_Norm
+        output: 265
+      - func_id: FUNC-002
+        name: Score_Classifier
+        output: "Category: 699.89"
+      - func_id: FUNC-003
+        name: Payment_Behavior_Parser
+        output:
+          spending_level: High
+          value_level: Large
+    facts:
+      - fact_id: F1
+        statement: "DTI_Ratio = Outstanding_Debt / Annual_Income"
+        value: 0.04238
+        derived_by: R_DTI
+        uses:
+          - O2
+          - O4
+      - fact_id: F2
+        statement: "Credit_Utilization_Ratio = 26.82% (~0.268226)"
+        value: 0.268226
+        derived_by: R_CU
+        uses:
+          - O3
+          - O4
+    goal:
+      type: Compute
+      target: Credit_Score
+      expected_score: 699.89
+      expected_category: "Category: 699.89"
+
+  - id: PROB-002
+    title: Teacher with stable history
+    description: High tenure teacher with excellent debt metrics.
+    source_record: "Data Clean.xlsx row 2"
+    objects:
+      - object_id: O1
+        label: Person
+        properties:
+          person_id: Teacher
+          occupation: Teacher
+      - object_id: O2
+        label: Income
+        properties:
+          annual_income: 34847.84
+      - object_id: O3
+        label: Loan
+        properties:
+          num_of_loan: 1
+      - object_id: O4
+        label: DebtProfile
+        properties:
+          outstanding_debt: 605.03
+      - object_id: O5
+        label: PaymentBehaviour
+        properties:
+          spending_level: High
+          value_level: Large
+      - object_id: O6
+        label: CreditHistory
+        properties:
+          raw_string: "26 Years and 8 Months"
+          months: 320
+      - object_id: O7
+        label: Metrics
+        properties:
+          dti_ratio: 0.01736
+          credit_utilization_percent: 38.5508484339563
+          credit_utilization_ratio: 0.385508
+          emi: 18.8162145731289
+          balance: 484.591214265007
+    func_results:
+      - func_id: FUNC-001
+        name: Age_Norm
+        output: 320
+      - func_id: FUNC-002
+        name: Score_Classifier
+        output: "Category: 741.73"
+      - func_id: FUNC-003
+        name: Payment_Behavior_Parser
+        output:
+          spending_level: High
+          value_level: Large
+    facts:
+      - fact_id: F1
+        statement: "DTI_Ratio = Outstanding_Debt / Annual_Income"
+        value: 0.01736
+        derived_by: R_DTI
+        uses:
+          - O2
+          - O4
+      - fact_id: F2
+        statement: "Credit_Utilization_Ratio = 38.55% (~0.385508)"
+        value: 0.385508
+        derived_by: R_CU
+        uses:
+          - O3
+          - O4
+    goal:
+      type: Compute
+      target: Credit_Score
+      expected_score: 741.73
+      expected_category: "Category: 741.73"
+
+  - id: PROB-003
+    title: Engineer high income profile
+    description: High income, low debt utilisation engineer for benchmarking.
+    source_record: "Data Clean.xlsx row 3"
+    objects:
+      - object_id: O1
+        label: Person
+        properties:
+          person_id: Engineer
+          occupation: Engineer
+      - object_id: O2
+        label: Income
+        properties:
+          annual_income: 143162.64
+      - object_id: O3
+        label: Loan
+        properties:
+          num_of_loan: 3
+      - object_id: O4
+        label: DebtProfile
+        properties:
+          outstanding_debt: 1303.01
+      - object_id: O5
+        label: PaymentBehaviour
+        properties:
+          spending_level: High
+          value_level: Large
+      - object_id: O6
+        label: CreditHistory
+        properties:
+          raw_string: "17 Years and 10 Months"
+          months: 214
+      - object_id: O7
+        label: Metrics
+        properties:
+          dti_ratio: 0.0091
+          credit_utilization_percent: 41.7025734239391
+          credit_utilization_ratio: 0.417026
+          emi: 246.992319453742
+          balance: 998.869296786323
+    func_results:
+      - func_id: FUNC-001
+        name: Age_Norm
+        output: 214
+      - func_id: FUNC-002
+        name: Score_Classifier
+        output: "Category: 718.88"
+      - func_id: FUNC-003
+        name: Payment_Behavior_Parser
+        output:
+          spending_level: High
+          value_level: Large
+    facts:
+      - fact_id: F1
+        statement: "DTI_Ratio = Outstanding_Debt / Annual_Income"
+        value: 0.0091
+        derived_by: R_DTI
+        uses:
+          - O2
+          - O4
+      - fact_id: F2
+        statement: "Credit_Utilization_Ratio = 41.70% (~0.417026)"
+        value: 0.417026
+        derived_by: R_CU
+        uses:
+          - O3
+          - O4
+    goal:
+      type: Compute
+      target: Credit_Score
+      expected_score: 718.88
+      expected_category: "Category: 718.88"
+
+  - id: PROB-004
+    title: Analyst with pristine profile
+    description: Synthetic case with full facts so inference can reach Credit_Score goal.
+    source_record: "Synthetic problem 1"
+    objects:
+      - object_id: O1
+        label: Person
+        properties:
+          person_id: Analyst
+          occupation: Analyst
+      - object_id: O2
+        label: Income
+        properties:
+          annual_income: 52000
+      - object_id: O3
+        label: Loan
+        properties:
+          num_of_loan: 2
+      - object_id: O4
+        label: DebtProfile
+        properties:
+          outstanding_debt: 2600
+          Avg_Credit_Limit: 15000
+      - object_id: O5
+        label: PaymentBehaviour
+        properties:
+          spending_level: Low
+          value_level: Small
+          Payment_Behaviour: Low_spent_Small_value_payments
+      - object_id: O6
+        label: CreditHistory
+        properties:
+          raw_string: "12 Years and 6 Months"
+          months: 150
+      - object_id: O7
+        label: Metrics
+        properties:
+          dti_ratio: 0.05
+          credit_utilization_ratio: 0.0867
+          credit_utilization_percent: 8.67
+          num_of_delayed_payment: 0
+    func_results:
+      - func_id: FUNC-001
+        name: Age_Norm
+        output: 150
+      - func_id: FUNC-002
+        name: Score_Classifier
+        output: "Category: Good"
+      - func_id: FUNC-003
+        name: Payment_Behavior_Parser
+        output:
+          spending_level: Low
+          value_level: Small
+    facts:
+      - fact_id: F1
+        statement: "Outstanding_Debt = 2600"
+        value: 2600
+        derived_by: Observation
+        uses:
+          - O4
+      - fact_id: F2
+        statement: "Annual_Income = 52000"
+        value: 52000
+        derived_by: Observation
+        uses:
+          - O2
+      - fact_id: F3
+        statement: "Num_of_Loan = 2"
+        value: 2
+        derived_by: Observation
+        uses:
+          - O3
+      - fact_id: F4
+        statement: "Num_of_Delayed_Payment = 0"
+        value: 0
+        derived_by: Observation
+        uses:
+          - O7
+      - fact_id: F5
+        statement: "DTI_Ratio = 0.05"
+        value: 0.05
+        derived_by: R_DTI
+        uses:
+          - O2
+          - O4
+      - fact_id: F6
+        statement: "Credit_Utilization_Ratio = 0.0867"
+        value: 0.0867
+        derived_by: R_CU
+        uses:
+          - O3
+          - O4
+    goal:
+      type: Compute
+      target: Credit_Score
+      expected_score: "Good"
+      expected_category: "Category: Good"
+

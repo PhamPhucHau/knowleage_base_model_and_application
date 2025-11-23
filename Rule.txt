@@ -1,0 +1,96 @@
+|--- Outstanding_Debt <= 1500.01
+|   |--- Payment_of_Min_Amount_Yes <= 0.50
+|   |   |--- Interest_Rate <= 12.50
+|   |   |   |--- Num_Credit_Card <= 2.50
+|   |   |   |   |--- Monthly_Balance <= 796.59
+|   |   |   |   |   |--- class: 0
+|   |   |   |   |--- Monthly_Balance >  796.59
+|   |   |   |   |   |--- class: 0
+|   |   |   |--- Num_Credit_Card >  2.50
+|   |   |   |   |--- Delay_from_due_date <= 15.50
+|   |   |   |   |   |--- class: 2
+|   |   |   |   |--- Delay_from_due_date >  15.50
+|   |   |   |   |   |--- class: 2
+|   |   |--- Interest_Rate >  12.50
+|   |   |   |--- Total_EMI_per_month <= 280.51
+|   |   |   |   |--- Occupation_Developer <= 0.50
+|   |   |   |   |   |--- class: 2
+|   |   |   |   |--- Occupation_Developer >  0.50
+|   |   |   |   |   |--- class: 2
+|   |   |   |--- Total_EMI_per_month >  280.51
+|   |   |   |   |--- Num_of_Loan <= 1.50
+|   |   |   |   |   |--- class: 0
+|   |   |   |   |--- Num_of_Loan >  1.50
+|   |   |   |   |   |--- class: 2
+|   |--- Payment_of_Min_Amount_Yes >  0.50
+|   |   |--- Interest_Rate <= 20.50
+|   |   |   |--- Num_Credit_Card <= 7.50
+|   |   |   |   |--- Delay_from_due_date <= 34.50
+|   |   |   |   |   |--- class: 2
+|   |   |   |   |--- Delay_from_due_date >  34.50
+|   |   |   |   |   |--- class: 1
+|   |   |   |--- Num_Credit_Card >  7.50
+|   |   |   |   |--- Num_Credit_Card <= 15.50
+|   |   |   |   |   |--- class: 1
+|   |   |   |   |--- Num_Credit_Card >  15.50
+|   |   |   |   |   |--- class: 2
+|   |   |--- Interest_Rate >  20.50
+|   |   |   |--- Total_EMI_per_month <= 21.02
+|   |   |   |   |--- Monthly_Balance <= 257.71
+|   |   |   |   |   |--- class: 2
+|   |   |   |   |--- Monthly_Balance >  257.71
+|   |   |   |   |   |--- class: 1
+|   |   |   |--- Total_EMI_per_month >  21.02
+|   |   |   |   |--- Total_EMI_per_month <= 292.59
+|   |   |   |   |   |--- class: 1
+|   |   |   |   |--- Total_EMI_per_month >  292.59
+|   |   |   |   |   |--- class: 1
+|--- Outstanding_Debt >  1500.01
+|   |--- Outstanding_Debt <= 2696.55
+|   |   |--- Interest_Rate <= 14.50
+|   |   |   |--- Outstanding_Debt <= 1645.58
+|   |   |   |   |--- Age <= 39.50
+|   |   |   |   |   |--- class: 1
+|   |   |   |   |--- Age >  39.50
+|   |   |   |   |   |--- class: 2
+|   |   |   |--- Outstanding_Debt >  1645.58
+|   |   |   |   |--- Credit_History_Months <= 180.50
+|   |   |   |   |   |--- class: 2
+|   |   |   |   |--- Credit_History_Months >  180.50
+|   |   |   |   |   |--- class: 2
+|   |   |--- Interest_Rate >  14.50
+|   |   |   |--- Credit_History_Months <= 52.50
+|   |   |   |   |--- Monthly_Inhand_Salary <= 4347.70
+|   |   |   |   |   |--- class: 2
+|   |   |   |   |--- Monthly_Inhand_Salary >  4347.70
+|   |   |   |   |   |--- class: 1
+|   |   |   |--- Credit_History_Months >  52.50
+|   |   |   |   |--- Interest_Rate <= 19.50
+|   |   |   |   |   |--- class: 1
+|   |   |   |   |--- Interest_Rate >  19.50
+|   |   |   |   |   |--- class: 1
+|   |--- Outstanding_Debt >  2696.55
+|   |   |--- Num_Credit_Card <= 9.50
+|   |   |   |--- Interest_Rate <= 27.50
+|   |   |   |   |--- Outstanding_Debt <= 2962.53
+|   |   |   |   |   |--- class: 2
+|   |   |   |   |--- Outstanding_Debt >  2962.53
+|   |   |   |   |   |--- class: 1
+|   |   |   |--- Interest_Rate >  27.50
+|   |   |   |   |--- Delay_from_due_date <= 33.50
+|   |   |   |   |   |--- class: 2
+|   |   |   |   |--- Delay_from_due_date >  33.50
+|   |   |   |   |   |--- class: 2
+|   |   |--- Num_Credit_Card >  9.50
+|   |   |   |--- Outstanding_Debt <= 2739.29
+|   |   |   |   |--- Amount_invested_monthly <= 99.11
+|   |   |   |   |   |--- class: 1
+|   |   |   |   |--- Amount_invested_monthly >  99.11
+|   |   |   |   |   |--- class: 1
+|   |   |   |--- Outstanding_Debt >  2739.29
+|   |   |   |   |--- Outstanding_Debt <= 2901.38
+|   |   |   |   |   |--- class: 2
+|   |   |   |   |--- Outstanding_Debt >  2901.38
+|   |   |   |   |   |--- class: 2
+
+" với LABEL_MAPPING = {0: "Good", 1: "Poor", 2: "Standard"} 

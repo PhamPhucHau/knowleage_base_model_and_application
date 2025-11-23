@@ -1,0 +1,94 @@
+{
+  "problems": [
+    {
+      "problem_id": "PROB-V2-GOOD",
+      "label": "Good",
+      "facts": {
+        "Outstanding_Debt": 809.98,
+        "Payment_of_Min_Amount_Yes": 0.0,
+        "Interest_Rate": 3.0,
+        "Num_Credit_Card": 4.0,
+        "Monthly_Balance": 312.494088679437,
+        "Total_EMI_per_month": 49.5749492148942,
+        "Num_of_Loan": 4.0,
+        "Delay_from_due_date": 3.0,
+        "Monthly_Inhand_Salary": 1824.84333333333,
+        "Amount_invested_monthly": 80.4152954390025,
+        "Age": 23.0,
+        "Credit_History_Months": 265.0,
+        "Occupation_Developer": 0.0
+      },
+      "raw": {
+        "Outstanding_Debt": 809.98,
+        "Payment_of_Min_Amount": "No",
+        "Interest_Rate": 3,
+        "Num_Credit_Card": 4,
+        "Monthly_Balance": 312.494088679437,
+        "Total_EMI_per_month": 49.5749492148942,
+        "Num_of_Loan": 4,
+        "Delay_from_due_date": 3,
+        "Age": 23
+      }
+    },
+    {
+      "problem_id": "PROB-V2-POOR",
+      "label": "Poor",
+      "facts": {
+        "Outstanding_Debt": 1704.18,
+        "Payment_of_Min_Amount_Yes": 1.0,
+        "Interest_Rate": 15.0,
+        "Num_Credit_Card": 7.0,
+        "Monthly_Balance": 392.196184570224,
+        "Total_EMI_per_month": 70.4783326720726,
+        "Num_of_Loan": 0.0,
+        "Delay_from_due_date": 30.0,
+        "Monthly_Inhand_Salary": 2611.115,
+        "Amount_invested_monthly": 38.4369827577036,
+        "Age": 30.0,
+        "Credit_History_Months": 176.0,
+        "Occupation_Developer": 0.0
+      },
+      "raw": {
+        "Outstanding_Debt": 1704.18,
+        "Payment_of_Min_Amount": "Yes",
+        "Interest_Rate": 15,
+        "Num_Credit_Card": 7,
+        "Monthly_Balance": 392.196184570224,
+        "Total_EMI_per_month": 70.4783326720726,
+        "Num_of_Loan": 0,
+        "Delay_from_due_date": 30,
+        "Age": 30
+      }
+    },
+    {
+      "problem_id": "PROB-V2-STANDARD",
+      "label": "Standard",
+      "facts": {
+        "Outstanding_Debt": 1303.01,
+        "Payment_of_Min_Amount_Yes": 0.0,
+        "Interest_Rate": 8.0,
+        "Num_Credit_Card": 5.0,
+        "Monthly_Balance": 968.555517384619,
+        "Total_EMI_per_month": 246.992319453742,
+        "Num_of_Loan": 3.0,
+        "Delay_from_due_date": 8.0,
+        "Monthly_Inhand_Salary": 12187.22,
+        "Amount_invested_monthly": 263.174163161639,
+        "Age": 34.0,
+        "Credit_History_Months": 219.0,
+        "Occupation_Developer": 0.0
+      },
+      "raw": {
+        "Outstanding_Debt": 1303.01,
+        "Payment_of_Min_Amount": "No",
+        "Interest_Rate": 8,
+        "Num_Credit_Card": 5,
+        "Monthly_Balance": 968.555517384619,
+        "Total_EMI_per_month": 246.992319453742,
+        "Num_of_Loan": 3,
+        "Delay_from_due_date": 8,
+        "Age": 34
+      }
+    }
+  ]
+}
