@@ -65,6 +65,7 @@ def load_dataset(limit: int | None = None) -> pd.DataFrame:
 def build_request(row: pd.Series) -> ManualInferenceRequest:
     return ManualInferenceRequest(
         person_id=str(row.get("Occupation", "Person")),
+        occupation=row.get("Occupation"),
         annual_income=float(row.get("Annual_Income", 0)),
         outstanding_debt=float(row.get("Outstanding_Debt", 0)),
         num_of_loan=int(row.get("Num_of_Loan", 0)),

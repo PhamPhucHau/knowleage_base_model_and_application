@@ -29,6 +29,43 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from rules.funcs import FUNC_REGISTRY  # noqa: E402
 
+OCCUPATION_CREDIT_STATS: Dict[str, Dict[str, float]] = {
+    "Teacher": {"Good": 19.924295, "Poor": 28.114246, "Standard": 51.961459},
+    "Musician": {"Good": 19.247009, "Poor": 26.988037, "Standard": 53.764954},
+    "Architect": {"Good": 19.229469, "Poor": 25.718148, "Standard": 55.052383},
+    "Media_Manager": {"Good": 18.793343, "Poor": 24.82663, "Standard": 56.380028},
+    "Accountant": {"Good": 18.707483, "Poor": 28.027211, "Standard": 53.265306},
+    "Scientist": {"Good": 18.677573, "Poor": 27.743695, "Standard": 53.578732},
+    "Journalist": {"Good": 18.675722, "Poor": 28.998302, "Standard": 52.325976},
+    "Engineer": {"Good": 18.53875, "Poor": 29.156709, "Standard": 52.304541},
+    "Manager": {"Good": 18.457102, "Poor": 27.757751, "Standard": 53.785148},
+    "Developer": {"Good": 18.06694, "Poor": 28.312842, "Standard": 53.620219},
+    "Doctor": {"Good": 17.669045, "Poor": 26.843357, "Standard": 55.487598},
+    "Entrepreneur": {"Good": 17.537827, "Poor": 29.57359, "Standard": 52.888583},
+    "Lawyer": {"Good": 17.380273, "Poor": 25.91183, "Standard": 56.707897},
+    "Mechanic": {"Good": 17.254112, "Poor": 28.667338, "Standard": 54.07855},
+    "Writer": {"Good": 13.212894, "Poor": 30.605739, "Standard": 56.181367},
+}
+
+
+def _get_occupation(memory: WorkingMemory) -> Optional[str]:
+    occupation = memory.facts.get("occupation") or memory.facts.get("Occupation")
+    if occupation:
+        return str(occupation)
+    return None
+
+
+def _compute_occupation_risk(stats: Dict[str, float]) -> str:
+    standard_ratio = stats["Standard"]
+    diff_poor_good = stats["Poor"] - stats["Good"]
+    if standard_ratio >= 55.0:
+        return "Stable"
+    if diff_poor_good >= 12.0:
+        return "High"
+    if diff_poor_good <= 4.0:
+        return "Low"
+    return "Medium"
+
 
 # ---------------------------------------------------------------------------
 # Data classes
@@ -177,13 +214,35 @@ def rule_payment_parser(memory: WorkingMemory) -> Tuple[bool, Optional[str]]:
     return False, None
 
 
+def rule_occupation_profile(memory: WorkingMemory) -> Tuple[bool, Optional[str]]:
+    """
+    R_OCC_PROFILE: Ghi nhận tỷ lệ Good/Poor/Standard và mức rủi ro theo nghề nghiệp.
+    """
+    occupation = _get_occupation(memory)
+    if not occupation:
+        return False, None
+    stats = OCCUPATION_CREDIT_STATS.get(occupation)
+    if not stats:
+        return False, None
+
+    updated_any = False
+    for key, value in stats.items():
+        updated_any |= memory.upsert_fact(f"Occupation_{key}_Ratio", value, "R_OCC_PROFILE")
+
+    risk = _compute_occupation_risk(stats)
+    updated_any |= memory.upsert_fact("Occupation_Risk_Level", risk, "R_OCC_PROFILE")
+    return updated_any, "R_OCC_PROFILE" if updated_any else (False, None)
+
+
 def rule_credit_score_good(memory: WorkingMemory) -> Tuple[bool, Optional[str]]:
     """
     R_CS_G: Suy diễn Credit Score = Good
     
     Điều kiện (đã điều chỉnh dựa trên phân tích Good → Standard và Good → Unknown):
     - DTI_Ratio <= 0.05: Cho phép Delayed <= 10 và Utilization <= 0.7
-    - DTI_Ratio > 0.05 và <= 0.1: Cho phép Delayed <= 5 và Utilization <= 0.7
+    - DTI_Ratio > 0.05 và <= 0.1: Cho phép Delayed <= 8 và Utilization <= 0.7
+    - Nghề nghiệp rủi ro thấp chỉ nới nhẹ (+1 lần trễ, +0.02 utilization)
+    - Nghề nghiệp rủi ro cao siết nhẹ (-1 lần trễ, -0.02 utilization)
     
     Lý do: 
     - Good → Standard (24 cases): DTI=0.042, Delayed=7-8 → cần nới lỏng Delayed nếu DTI rất thấp
@@ -194,27 +253,37 @@ def rule_credit_score_good(memory: WorkingMemory) -> Tuple[bool, Optional[str]]:
         return False, None
     
     dti = memory.facts.get("DTI_Ratio", 1)
-    utilization = memory.facts.get("Credit_Utilization_Ratio", 1)
+    utilization = memory.facts.get("Credit_Utilization_Ratio")
+    if utilization is None:
+        utilization = 0.4 if dti <= 0.1 else 1
     delayed = memory.facts.get("Num_of_Delayed_Payment", 999)
-    
-    # Điều kiện Good: Nới lỏng hơn dựa trên DTI
+
+    risk = memory.facts.get("Occupation_Risk_Level")
+    delay_bonus = 0
+    util_bonus = 0.0
+    if risk in {"Stable", "Low"}:
+        delay_bonus = 1
+        util_bonus = 0.02
+    elif risk == "High":
+        delay_bonus = -1
+        util_bonus = -0.02
+
     if dti <= 0.05:
-        # DTI rất thấp: cho phép Delayed cao hơn
-        conditions = [
-            delayed <= 10,  # Nới lỏng từ 5 lên 10
-            utilization <= 0.7,
-        ]
+        delay_cap = 10 + delay_bonus
     elif dti <= 0.1:
-        # DTI thấp: cho phép Delayed cao hơn một chút
-        conditions = [
-            delayed <= 8,  # Nới lỏng từ 5 lên 8 để cover Good cases có DTI 0.042-0.05
-            utilization <= 0.7,
-        ]
+        delay_cap = 8 + delay_bonus
     else:
-        # DTI > 0.1: không match Good
         return False, None
-    
-    if all(conditions):
+
+    delay_cap = max(4, min(12, delay_cap))
+    util_cap = min(0.85, max(0.6, 0.7 + util_bonus))
+
+    if dti <= 0.03 and delayed <= 2:
+        util_cap = min(0.95, util_cap + 0.15)
+    if dti <= 0.02 and delayed <= 1:
+        util_cap = 0.98
+
+    if delayed <= delay_cap and utilization <= util_cap:
         updated = memory.upsert_fact("Credit_Score", "Good", "R_CS_G")
         return updated, "R_CS_G" if updated else (False, None)
     return False, None
@@ -231,6 +300,7 @@ def rule_credit_score_standard(memory: WorkingMemory) -> Tuple[bool, Optional[st
       * Delayed > 15 và <= 20 (nhiều Standard cases có Delayed 17-19)
       * Utilization > 0.5 nhưng DTI thấp và Delayed thấp
       * DTI > 0.1 và <= 0.3
+    - Nghề nghiệp Stable chỉ được ưu tiên nhẹ khi các chỉ số đều tốt
     - Và không quá xấu (DTI < 0.4, Delayed <= 20)
     """
     # Nếu đã có Credit_Score thì không chạy
@@ -238,18 +308,24 @@ def rule_credit_score_standard(memory: WorkingMemory) -> Tuple[bool, Optional[st
         return False, None
     
     dti = memory.facts.get("DTI_Ratio", 0)
-    utilization = memory.facts.get("Credit_Utilization_Ratio", 0)
+    utilization = memory.facts.get("Credit_Utilization_Ratio")
+    util_value = utilization if utilization is not None else 0.0
     delayed = memory.facts.get("Num_of_Delayed_Payment", 0)
+    risk = memory.facts.get("Occupation_Risk_Level")
     
+    util_good_threshold = 0.75
+    good_primary = dti <= 0.05 and delayed <= 10 and (utilization is None or util_value <= util_good_threshold)
+    good_secondary = dti <= 0.1 and delayed <= 8 and (utilization is None or util_value <= util_good_threshold)
+
     # Điều kiện Standard (mở rộng nhưng tránh match Good cases)
     # Case 1: DTI thấp nhưng có vấn đề về Delayed hoặc Utilization
     # KHÔNG match nếu có thể match Good (DTI <= 0.05 và Delayed <= 10, HOẶC DTI <= 0.1 và Delayed <= 8)
     case1 = (
-        dti <= 0.1 and
-        not (dti <= 0.05 and delayed <= 10) and  # Tránh match Good cases (DTI <= 0.05)
-        not (dti <= 0.1 and delayed <= 8),  # Tránh match Good cases (DTI <= 0.1)
-        (delayed > 5 or utilization > 0.2) and
-        delayed <= 17  # Giới hạn để không overlap với Poor (Delayed > 17)
+        dti <= 0.1
+        and not good_primary
+        and not good_secondary
+        and (delayed > 5 or util_value > 0.2)
+        and delayed <= 17
     )
     
     # Case 2: Delayed trong range Standard (5-17)
@@ -257,8 +333,8 @@ def rule_credit_score_standard(memory: WorkingMemory) -> Tuple[bool, Optional[st
     case2 = (
         5 < delayed <= 17 and
         dti < 0.4 and
-        not (dti <= 0.05 and delayed <= 10) and  # Tránh match Good cases
-        not (dti <= 0.1 and delayed <= 8) and  # Tránh match Good cases
+        not good_primary and  # Tránh match Good cases
+        not good_secondary and  # Tránh match Good cases
         not (dti >= 0.15 and delayed > 15)  # Tránh match Poor cases
     )
     
@@ -273,20 +349,20 @@ def rule_credit_score_standard(memory: WorkingMemory) -> Tuple[bool, Optional[st
     # Case 4: Utilization cao nhưng DTI thấp và Delayed thấp
     # KHÔNG match nếu có thể match Good
     case4 = (
-        utilization > 0.5 and
+        utilization is not None and util_value > 0.5 and
         dti <= 0.1 and
         delayed <= 5 and
-        not (dti <= 0.05 and delayed <= 10) and  # Tránh match Good cases
-        not (dti <= 0.1 and delayed <= 8)  # Tránh match Good cases
+        not good_primary and
+        not good_secondary
     )
     
     # Case 5: DTI thấp (<= 0.1) nhưng Delayed = 0-5 và Util thấp (có thể là Standard)
     case5 = (
         dti <= 0.1 and
         delayed <= 5 and
-        utilization <= 0.2 and
-        not (dti <= 0.05 and delayed <= 10) and  # Tránh match Good cases
-        not (dti <= 0.1 and delayed <= 8)  # Tránh match Good cases
+        util_value <= 0.2 and
+        not good_primary and
+        not good_secondary
     )
     
     # Case 6: Delayed > 17 nhưng DTI thấp (< 0.15) và không match Poor
@@ -295,8 +371,27 @@ def rule_credit_score_standard(memory: WorkingMemory) -> Tuple[bool, Optional[st
         dti < 0.15 and
         delayed <= 20  # Cho phép Delayed cao hơn một chút
     )
+
+    # Case 7: Nghề nghiệp ổn định (Stable) + chỉ số ở mức trung tính
+    case7 = (
+        risk == "Stable" and
+        dti <= 0.12 and
+        delayed <= 10 and
+        (utilization is None or util_value <= 0.5) and
+        not good_primary and
+        not good_secondary
+    )
+
+    # Case 8: Good candidate nhưng util cao → hạ xuống Standard
+    case8 = (
+        dti <= 0.05 and
+        delayed <= 6 and
+        utilization is not None and
+        util_value > util_good_threshold and
+        util_value <= 0.95
+    )
     
-    is_standard = (case1 or case2 or case3 or case4 or case5 or case6) and (
+    is_standard = (case1 or case2 or case3 or case4 or case5 or case6 or case7 or case8) and (
         dti < 0.4 and  # Không quá xấu
         delayed <= 20  # Mở rộng từ 17 lên 20 để cover nhiều cases hơn
     )
@@ -320,7 +415,8 @@ def rule_credit_score_poor(memory: WorkingMemory) -> Tuple[bool, Optional[str]]:
     - Case 4: Utilization > 0.5 + additional_risk
     - Case 5: Delayed > 20 (không cần điều kiện khác)
     - Case 6: DTI >= 0.4 (không cần additional_risk) - MỚI
-    - Case 7: Utilization > 0.7 (không cần additional_risk) - MỚI
+    - Case 7: Utilization > 0.7 (không cần additional_risk)
+    - Case 8: Nghề nghiệp rủi ro cao (High) + chỉ số xấu vừa phải (DTI ≥ 0.3 & Delayed ≥ 12, hoặc Util ≥ 0.7 & Delayed ≥ 10)
     
     Lý do: 
     - Tất cả 24 Poor Unknown cases có Delayed > 15 (mean=21.2, min=18, max=24)
@@ -336,6 +432,7 @@ def rule_credit_score_poor(memory: WorkingMemory) -> Tuple[bool, Optional[str]]:
     delayed = memory.facts.get("Num_of_Delayed_Payment", 0)
     num_loan = memory.facts.get("Num_of_Loan", 0)
     history_months = memory.facts.get("Credit_History_Age_Months", math.inf)
+    risk = memory.facts.get("Occupation_Risk_Level")
     
     # Điều kiện Poor (nới lỏng nhưng tránh match Standard cases)
     # Case 1: Delayed quá cao (> 17) + (DTI >= 0.15 HOẶC Utilization > 0.3)
@@ -379,8 +476,17 @@ def rule_credit_score_poor(memory: WorkingMemory) -> Tuple[bool, Optional[str]]:
     # Case 7: Utilization rất cao (> 0.7) là đủ để là Poor (không cần additional_risk)
     # Ngưỡng 0.7 để cover các cases có Utilization cao nhưng không có additional_risk
     case7 = utilization > 0.7
+
+    # Case 8: Nghề nghiệp rủi ro cao + chỉ số trung bình nhưng đáng lo
+    case8 = (
+        risk == "High" and
+        (
+            (dti >= 0.3 and delayed >= 12) or
+            (utilization >= 0.7 and delayed >= 10)
+        )
+    )
     
-    if case1 or case1b or case2 or case3 or case4 or case5 or case6 or case7:
+    if case1 or case1b or case2 or case3 or case4 or case5 or case6 or case7 or case8:
         updated = memory.upsert_fact("Credit_Score", "Poor", "R_CS_P")
         return updated, "R_CS_P" if updated else (False, None)
     return False, None
@@ -390,6 +496,7 @@ RULE_EXECUTORS = {
     "R_DTI": rule_dti_ratio,
     "R_CU": rule_credit_utilization,
     "R_P1": rule_payment_parser,
+    "R_OCC_PROFILE": rule_occupation_profile,
     "R_CS_G": rule_credit_score_good,
     "R_CS_S": rule_credit_score_standard,  # Thêm rule cho Standard
     "R_CS_P": rule_credit_score_poor,
@@ -407,7 +514,11 @@ class InferenceEngine:
 
     def solve(self, problem_id: str) -> InferenceResult:
         problem = self.kb.fetch_problem(problem_id)
-        rules = self.kb.fetch_rules()
+        rules = self.kb.fetch_rules() or []
+        existing = {rule["name"] for rule in rules} if rules else set()
+        for name in RULE_EXECUTORS:
+            if name not in existing:
+                rules.append({"name": name})
         memory = WorkingMemory()
 
         self._initialize_memory(problem, memory)
@@ -455,6 +566,9 @@ class InferenceEngine:
 
         if "Payment_Behaviour" in memory.facts:
             rule_payment_parser(memory)
+
+        # Tiền xử lý thông tin nghề nghiệp để các rule khác sử dụng
+        rule_occupation_profile(memory)
 
     def _forward_chain(self, memory: WorkingMemory, rules: List[Dict[str, Any]], goal_key: str) -> bool:
         max_iterations = 20

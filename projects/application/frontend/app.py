@@ -12,6 +12,17 @@ import csv
 from pathlib import Path
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
+
+try:
+    import networkx as nx
+except ImportError:  # pragma: no cover
+    nx = None
+
+try:
+    import plotly.graph_objects as go
+except ImportError:  # pragma: no cover
+    go = None
 
 API_URL = os.getenv("CREDIT_API_URL", "http://localhost:8000/api/v1/predict/manual")
 
@@ -99,6 +110,140 @@ def display_credit_score_result(score: str, score_vn: str) -> None:
     st.markdown(html, unsafe_allow_html=True)
 
 
+def parse_step(step: str) -> tuple[str, str]:
+    """Tách bước suy luận thành (nguồn, kết quả)."""
+    if "⇒" in step:
+        left, right = step.split("⇒", 1)
+        return left.strip(), right.strip()
+    return step.strip(), ""
+
+
+def get_step_type(step_label: str) -> str:
+    """Xác định loại bước để đổi màu / icon."""
+    label = step_label.lower()
+    if label.startswith("observation"):
+        return "observation"
+    if any(label.startswith(prefix) for prefix in ("age_norm", "payment_behavior_parser", "score_classifier")):
+        return "function"
+    if label.startswith("r_"):
+        return "rule"
+    return "other"
+
+
+def build_causal_graph_from_steps(steps: list[str]) -> nx.DiGraph | None:
+    """Tạo đồ thị causal tùy theo chuỗi suy luận."""
+    if not steps or nx is None:
+        return None
+
+    graph = nx.DiGraph()
+    previous_node = None
+    for idx, step in enumerate(steps):
+        left, right = parse_step(step)
+        node_id = f"step_{idx}"
+        node_type = get_step_type(left)
+        graph.add_node(
+            node_id,
+            title=left,
+            detail=right,
+            type=node_type,
+            order=idx,
+        )
+        if previous_node is not None:
+            graph.add_edge(previous_node, node_id)
+        previous_node = node_id
+    return graph
+
+
+def build_plotly_figure(graph: nx.DiGraph) -> "go.Figure | None":
+    """Render đồ thị causal bằng Plotly."""
+    if graph is None or go is None:
+        return None
+
+    type_colors = {
+        "observation": "#17a2b8",
+        "function": "#6f42c1",
+        "rule": "#fd7e14",
+        "other": "#6c757d",
+    }
+
+    # layout dạng graph chuẩn thay vì đường thẳng
+    positions = nx.spring_layout(graph, seed=42)
+
+    edge_x = []
+    edge_y = []
+    for source, target in graph.edges():
+        x0, y0 = positions[source]
+        x1, y1 = positions[target]
+        edge_x.extend([x0, x1, None])
+        edge_y.extend([y0, y1, None])
+
+    edge_trace = go.Scatter(
+        x=edge_x,
+        y=edge_y,
+        line=dict(width=1, color="#adb5bd"),
+        hoverinfo="none",
+        mode="lines",
+    )
+
+    node_x = []
+    node_y = []
+    text = []
+    colors = []
+    for node in graph.nodes():
+        x, y = positions[node]
+        data = graph.nodes[node]
+        node_x.append(x)
+        node_y.append(y)
+        title = data["title"]
+        detail = data["detail"]
+        detail_text = f"<br>{detail}" if detail else ""
+        text.append(f"{title}{detail_text}")
+        colors.append(type_colors.get(data["type"], type_colors["other"]))
+
+    node_trace = go.Scatter(
+        x=node_x,
+        y=node_y,
+        mode="markers+text",
+        text=[graph.nodes[n]["title"] for n in graph.nodes()],
+        textposition="top center",
+        hovertext=text,
+        hoverinfo="text",
+        marker=dict(
+            color=colors,
+            size=28,
+            line=dict(width=2, color="#ffffff"),
+        ),
+    )
+
+    fig = go.Figure(data=[edge_trace, node_trace])
+    fig.update_layout(
+        title="Biểu đồ nhân quả cho phiên suy luận hiện tại",
+        showlegend=False,
+        hovermode="closest",
+        margin=dict(b=40, l=20, r=20, t=50),
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+    )
+    return fig
+
+
+def render_causal_diagram(steps: list[str]) -> None:
+    """Hiển thị biểu đồ nhân quả (user-specific) trên UI."""
+    if not steps:
+        st.info("Chưa có bước suy luận để vẽ biểu đồ.")
+        return
+    if nx is None or go is None:
+        st.warning("Thiếu thư viện networkx hoặc plotly để hiển thị biểu đồ nhân quả.")
+        return
+    graph = build_causal_graph_from_steps(steps)
+    fig = build_plotly_figure(graph)
+    if fig is None:
+        st.warning("Không thể dựng biểu đồ nhân quả.")
+        return
+    html_string = fig.to_html(full_html=False, include_plotlyjs="cdn")
+    components.html(html_string, height=600, scrolling=True)
+
+
 def main() -> None:
     st.set_page_config(page_title="Credit Score Demo", layout="centered")
     st.title("Demo dự báo Điểm Tín dụng")
@@ -123,7 +268,7 @@ def main() -> None:
         occupation = st.selectbox(
             "Nghề nghiệp",
             options=[""] + occupation_options,
-            index=0,
+            index=1,
             help="Chọn nghề nghiệp của khách hàng"
         )
         
@@ -328,7 +473,7 @@ def main() -> None:
             "mode": mode,
         }
         try:
-            response = requests.post(API_URL, json=payload, timeout=30)
+            response = requests.post(API_URL, json=payload, timeout=120)
             response.raise_for_status()
             data = response.json()
         except Exception as exc:  # noqa: BLE001
@@ -362,6 +507,9 @@ def main() -> None:
 
         if data.get("missing_facts"):
             st.warning(f"⚠️ Thiếu facts: {', '.join(data['missing_facts'])}")
+
+        st.subheader("🧠 Biểu đồ nhân quả (User-specific)")
+        render_causal_diagram(data.get("steps", []))
 
 
 if __name__ == "__main__":

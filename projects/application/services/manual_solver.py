@@ -26,6 +26,7 @@ class ManualInferenceRequest:
     spending_level: Optional[str] = None
     value_level: Optional[str] = None
     avg_credit_limit: Optional[float] = None
+    occupation: Optional[str] = None
 
 
 @dataclass
@@ -76,6 +77,8 @@ def run_manual_inference(request: ManualInferenceRequest) -> ManualInferenceResu
 
     # Seed observations
     _seed_observation(memory, "Person_ID", request.person_id)
+    if request.occupation:
+        _seed_observation(memory, "Occupation", request.occupation)
     _seed_observation(memory, "Annual_Income", request.annual_income)
     _seed_observation(memory, "Outstanding_Debt", request.outstanding_debt)
     _seed_observation(memory, "Num_of_Loan", request.num_of_loan)
@@ -97,11 +100,16 @@ def run_manual_inference(request: ManualInferenceRequest) -> ManualInferenceResu
         dti = request.outstanding_debt / request.annual_income
         _seed_observation(memory, "DTI_Ratio", round(dti, 5))
 
-    if request.num_of_loan and avg_limit:
-        cu = request.outstanding_debt / (request.num_of_loan * avg_limit)
+    if avg_limit:
+        effective_loans = request.num_of_loan if request.num_of_loan and request.num_of_loan > 0 else 1
+        cu = request.outstanding_debt / (effective_loans * avg_limit)
         _seed_observation(memory, "Credit_Utilization_Ratio", round(cu, 5))
 
     _apply_funcs(memory)
+
+    occ_executor = RULE_EXECUTORS.get("R_OCC_PROFILE")
+    if occ_executor:
+        occ_executor(memory)
 
     success = _forward_chain(memory, goal_key="Credit_Score")
     missing = [] if success else ["Credit_Score"]

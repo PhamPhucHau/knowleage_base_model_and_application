@@ -33,6 +33,7 @@ app = FastAPI(title="Credit Knowledge API", version="1.0")
 
 class ManualPredictPayload(BaseModel):
     person_id: str = Field(..., description="Unique identifier for the applicant")
+    occupation: Optional[str] = Field(None, description="Job/occupation label")
     annual_income: float = Field(..., gt=0)
     outstanding_debt: float = Field(..., ge=0)
     num_of_loan: int = Field(..., ge=0)
@@ -123,6 +124,7 @@ def predict_manual(payload: ManualPredictPayload) -> Dict[str, Any]:
     # Only pass valid fields for ontology mode (exclude decision_tree fields)
     ontology_fields = {
         "person_id": payload.person_id,
+        "occupation": payload.occupation,
         "annual_income": payload.annual_income,
         "outstanding_debt": payload.outstanding_debt,
         "num_of_loan": payload.num_of_loan,
